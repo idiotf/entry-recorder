@@ -1,0 +1,20 @@
+{
+  "name": "entry-recorder",
+  "module": "index.ts",
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "mediabunny": "^1.21.0"
+  },
+  "scripts": {
+    "watch": "bun build --minify --target=browser --watch --sourcemap=linked --no-clear-screen --outdir=dist src/index.ts",
+    "build": "bun build --minify --target=browser --outfile=dist/index.js src/index.ts",
+    "serve": "bun watch | serve --cors dist"
+  },
+  "devDependencies": {
+    "serve": "^14.2.5"
+  }
+}
