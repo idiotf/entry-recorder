@@ -1,14 +1,11 @@
 export default class Timer {
-  #speedChangeTime = 0
-  #resetTime
+  #offset = 0
   #speed = 0
 
-  constructor(protected now = performance.now) {
-    this.#resetTime = this.now()
-  }
+  constructor(protected now = performance.now) {}
 
   get time() {
-    return this.#speedChangeTime + this.#speed * (this.now() - this.#resetTime)
+    return this.#offset + this.#speed * this.now()
   }
 
   get speed() {
@@ -16,13 +13,11 @@ export default class Timer {
   }
 
   set time(time: number) {
-    this.#speedChangeTime = time - this.#speed * (this.now() - this.#resetTime)
+    this.#offset = time - this.#speed * this.now()
   }
 
   set speed(speed: number) {
-    const now = this.now()
-    this.#speedChangeTime += this.#speed * (now - this.#resetTime)
-    this.#resetTime = now
+    this.#offset += (this.#speed - speed) * this.now()
     this.#speed = speed
   }
 }

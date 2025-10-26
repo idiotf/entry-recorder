@@ -33,9 +33,12 @@ self.setInterval = (setInterval => (handler, timeout, ...args) => {
 })(setInterval)
 
 const originalRandom = Math.random
-;(Math as any).seedrandom('made by aqu3180')
+;(Math as any).seedrandom(prompt('시드를 입력하세요.'))
 const seededRandom = Math.random
 Math.random = originalRandom
+
+const originalRequestAnimationFrame = requestAnimationFrame
+const originalCancelAnimationFrame = cancelAnimationFrame
 
 Entry.engine.toggleRun()
 Entry.addEventListener('stop', () => controller.abort())
@@ -86,7 +89,9 @@ async function createVideoEncoder() {
     },
   })
 
-  const timeouts: Parameters<typeof setTimeout>[] = []
+  const timeouts: [handler: TimerHandler, timeout: number, ...args: unknown[]][] = []
+  const frameTasks: FrameRequestCallback[] = []
+
   Entry.TimeWait = class TimeWait extends Entry.TimeWait {
     override startTime = this.now()
 
@@ -121,25 +126,56 @@ async function createVideoEncoder() {
     }
   }
 
-  while (!controller.signal.aborted) {
-    Entry.stage?.update()
+  function scheduleFrame(callback: FrameRequestCallback) {
+    return frameTasks.push(callback)
+  }
 
+  function unscheduleFrame(handle: number) {
+    delete frameTasks[handle]
+  }
+
+  while (!controller.signal.aborted) {
     const ms = frameNo++ * Entry.tickTime
+
+    frameTasks.forEach((callback, i) => {
+      Math.random = seededRandom
+      self.requestAnimationFrame = scheduleFrame
+      self.cancelAnimationFrame = unscheduleFrame
+
+      callback(ms)
+      delete frameTasks[i]
+
+      Math.random = originalRandom
+      self.requestAnimationFrame = originalRequestAnimationFrame
+      self.cancelAnimationFrame = originalCancelAnimationFrame
+    })
+
+    Entry.stage?.update()
     await canvasSource.add(ms / 1000)
 
-    for (const [handler, timeout, ...args] of timeouts) if (timeout! <= ms) {
-      if (typeof handler == 'string') eval(handler)
-      else handler(...args)
-    }
+    timeouts.forEach(([handler, timeout, ...args], i) => {
+      if (timeout <= ms) {
+        if (typeof handler == 'string') eval(handler)
+        else handler(...args)
+        delete timeouts[i]
+      }
+    })
 
     Entry.engine.projectTimer.setValue(timer.time.toFixed(3))
+
     Math.random = seededRandom
+    self.requestAnimationFrame = scheduleFrame
+    self.cancelAnimationFrame = unscheduleFrame
+
     Entry.engine.update()
+
     Math.random = originalRandom
+    self.requestAnimationFrame = originalRequestAnimationFrame
+    self.cancelAnimationFrame = originalCancelAnimationFrame
   }
 
   await output.finalize()
-  alert('done recording')
+  alert('녹화가 끝났습니다.')
 }
 
 function disableEntryFHD(canvas: HTMLCanvasElement, width: number, height: number) {
