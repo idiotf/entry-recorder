@@ -12,11 +12,11 @@ export default class Timer {
     return this.#speed
   }
 
-  set time(time: number) {
+  set time(time) {
     this.#offset = time - this.#speed * this.now()
   }
 
-  set speed(speed: number) {
+  set speed(speed) {
     this.#offset += (this.#speed - speed) * this.now()
     this.#speed = speed
   }

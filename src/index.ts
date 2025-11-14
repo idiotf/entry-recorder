@@ -83,6 +83,9 @@ async function createVideoEncoder() {
     time == null || Entry.engine.projectTimer.setValue((timer.time = time).toFixed(3))
 
   Object.defineProperty(Entry.engine.projectTimer, 'isPaused', {
+    get() {
+      return !timer.speed
+    },
     set(isPaused) {
       if (isPaused) timer.speed = 0
       else timer.speed = 1
