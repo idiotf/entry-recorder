@@ -190,19 +190,34 @@ interface Handle {
   }
 }
 
-export default async function resize(width: number, height: number) {
-  const global = ((document.querySelector('iframe.eaizycc0') as HTMLIFrameElement | null)?.contentWindow || self) as {
-    Entry?: EntryGlobal
-  }
-  const Entry = await new Promise<EntryGlobal | undefined>(resolve => resolve(global.Entry)).catch(() => {})
-  const stage = Entry?.stage
+function disableEntryFHD(canvas: HTMLCanvasElement, width: number, height: number) {
+  Object.defineProperties(canvas, {
+    offsetWidth: {
+      get() {
+        return width
+      },
+    },
+    offsetHeight: {
+      get() {
+        return height
+      },
+    },
+  })
+}
+
+export default function resize(width: number, height: number) {
+  if (typeof Entry != 'object') return
+  const stage = Entry.stage
   if (!stage) return
 
   const { type, engine, options: { useWebGL } } = Entry
   const { canvas } = stage
   const canvasElement = canvas.canvas
+  disableEntryFHD(canvasElement, width, height)
 
-  if (useWebGL) for (const text of canvas.children.flatMap(function findTree(v): StageObject[] { return [v, ...v.children.flatMap(findTree)] }).filter(v => v.resolution)) text.resolution = width / 640
+  if (useWebGL) for (const text of canvas.children.flatMap(function findTree(v): StageObject[] {
+    return [v, ...v.children.flatMap(findTree)]
+  }).filter(v => v.resolution)) text.resolution = width / 640
 
   if (canvasElement.width != width || canvasElement.height != height) {
     canvasElement.width = width

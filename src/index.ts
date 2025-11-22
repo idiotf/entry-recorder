@@ -2,6 +2,28 @@ import { StreamTarget, CanvasSource, Mp4OutputFormat, Output, QUALITY_MEDIUM } f
 import resize from './resize'
 import Timer from './timer'
 
+interface SaveFilePickerOptions {
+  excludeAcceptAllOption?: boolean
+  id?: string
+  startIn?: FileSystemHandle | 'desktop' | 'documents' | 'downloads' | 'music' | 'pictures' | 'videos'
+  suggestedName?: string
+  types?: SaveFileType[]
+}
+
+interface SaveFileType {
+  accept: Record<string, string[]>
+  description?: string
+}
+
+declare global {
+  /** [MDN Reference](https://developer.mozilla.org/docs/Web/API/Window/showSaveFilePicker) */
+  function showSaveFilePicker(options?: SaveFilePickerOptions): Promise<FileSystemFileHandle>
+
+  interface Math {
+    seedrandom(seed: any): void
+  }
+}
+
 /**
  * `Entry.engine.ticker`에 들어갈 값입니다. 만약 이 값이 `clearInterval`에 사용된다면,
  * `controller.abort()`가 호출됩니다.
@@ -33,7 +55,7 @@ self.setInterval = (setInterval => (handler, timeout, ...args) => {
 })(setInterval)
 
 const originalRandom = Math.random
-;(Math as any).seedrandom(prompt('시드를 입력하세요.'))
+Math.seedrandom(prompt('시드를 입력하세요.', 'made by aqu3180'))
 const seededRandom = Math.random
 Math.random = originalRandom
 
@@ -46,8 +68,33 @@ Entry.addEventListener('stop', () => controller.abort())
 clearInterval(Entry.engine.ticker)
 setInterval(Entry.engine.update)
 
+const timeouts: [handler: TimerHandler, timeout: number, ...args: unknown[]][] = []
+const frameTasks: FrameRequestCallback[] = []
+
+function scheduleFrame(callback: FrameRequestCallback) {
+  return frameTasks.push(callback)
+}
+
+function unscheduleFrame(handle: number) {
+  delete frameTasks[handle]
+}
+
+const withMonkeyPatch = <Return, Args extends any[]>(callback: (...args: Args) => Return) => (...args: Args) => {
+  Math.random = seededRandom
+  self.requestAnimationFrame = scheduleFrame
+  self.cancelAnimationFrame = unscheduleFrame
+
+  const value = callback(...args)
+
+  Math.random = originalRandom
+  self.requestAnimationFrame = originalRequestAnimationFrame
+  self.cancelAnimationFrame = originalCancelAnimationFrame
+
+  return value
+}
+
 async function createVideoEncoder() {
-  const handle: FileSystemFileHandle = await (self as any).showSaveFilePicker({
+  const handle = await self.showSaveFilePicker({
     startIn: 'videos',
     types: [{
       accept: {
@@ -65,11 +112,10 @@ async function createVideoEncoder() {
   const canvas = Entry.canvas_
   const width = 2560, height = 1440
 
-  disableEntryFHD(canvas, width, height)
   resize(width, height)
 
   const canvasSource = new CanvasSource(canvas, {
-    codec: 'av1',
+    codec: 'avc',
     bitrate: QUALITY_MEDIUM,
   })
 
@@ -92,15 +138,12 @@ async function createVideoEncoder() {
     },
   })
 
-  const timeouts: [handler: TimerHandler, timeout: number, ...args: unknown[]][] = []
-  const frameTasks: FrameRequestCallback[] = []
-
   Entry.TimeWait = class TimeWait extends Entry.TimeWait {
     override startTime = this.now()
 
     constructor(id: unknown, cb: Function, ms: number) {
       super(id, cb, ms)
-      clearTimeout(this.timer!)
+      clearTimeout(this.timer)
       this.timer = this.setTimeout(this.callback.bind(this), ms)
     }
 
@@ -129,29 +172,13 @@ async function createVideoEncoder() {
     }
   }
 
-  function scheduleFrame(callback: FrameRequestCallback) {
-    return frameTasks.push(callback)
-  }
-
-  function unscheduleFrame(handle: number) {
-    delete frameTasks[handle]
-  }
-
   while (!controller.signal.aborted) {
     const ms = frameNo++ * Entry.tickTime
 
-    frameTasks.forEach((callback, i) => {
-      Math.random = seededRandom
-      self.requestAnimationFrame = scheduleFrame
-      self.cancelAnimationFrame = unscheduleFrame
-
+    frameTasks.forEach(withMonkeyPatch((callback, i) => {
       callback(ms)
       delete frameTasks[i]
-
-      Math.random = originalRandom
-      self.requestAnimationFrame = originalRequestAnimationFrame
-      self.cancelAnimationFrame = originalCancelAnimationFrame
-    })
+    }))
 
     Entry.stage?.update()
     await canvasSource.add(ms / 1000)
@@ -165,33 +192,9 @@ async function createVideoEncoder() {
     })
 
     Entry.engine.projectTimer.setValue(timer.time.toFixed(3))
-
-    Math.random = seededRandom
-    self.requestAnimationFrame = scheduleFrame
-    self.cancelAnimationFrame = unscheduleFrame
-
-    Entry.engine.update()
-
-    Math.random = originalRandom
-    self.requestAnimationFrame = originalRequestAnimationFrame
-    self.cancelAnimationFrame = originalCancelAnimationFrame
+    withMonkeyPatch(() => Entry.engine.update())()
   }
 
   await output.finalize()
   alert('녹화가 끝났습니다.')
-}
-
-function disableEntryFHD(canvas: HTMLCanvasElement, width: number, height: number) {
-  Object.defineProperties(canvas, {
-    offsetWidth: {
-      get() {
-        return width
-      },
-    },
-    offsetHeight: {
-      get() {
-        return height
-      },
-    },
-  })
 }
