@@ -194,12 +194,12 @@ function disableEntryFHD(canvas: HTMLCanvasElement, width: number, height: numbe
   Object.defineProperties(canvas, {
     offsetWidth: {
       get() {
-        return width
+        return width / devicePixelRatio
       },
     },
     offsetHeight: {
       get() {
-        return height
+        return height / devicePixelRatio
       },
     },
   })
