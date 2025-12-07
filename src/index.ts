@@ -59,39 +59,53 @@ Math.seedrandom(prompt('시드를 입력하세요.', 'made by aqu3180'))
 const seededRandom = Math.random
 Math.random = originalRandom
 
-const originalRequestAnimationFrame = requestAnimationFrame
-const originalCancelAnimationFrame = cancelAnimationFrame
-
-Entry.engine.toggleRun()
-Entry.addEventListener('stop', () => controller.abort())
-
-clearInterval(Entry.engine.ticker)
-setInterval(Entry.engine.update)
+const delayMode = false
 
 const timeouts: [handler: TimerHandler, timeout: number, ...args: unknown[]][] = []
 const frameTasks: FrameRequestCallback[] = []
 
-function scheduleFrame(callback: FrameRequestCallback) {
-  return frameTasks.push(callback)
-}
+const originalRequestAnimationFrame = requestAnimationFrame
+const originalCancelAnimationFrame = cancelAnimationFrame
 
-function unscheduleFrame(handle: number) {
-  delete frameTasks[handle]
-}
+const scheduleFrame = (callback: FrameRequestCallback) => frameTasks.push(callback)
+const unscheduleFrame = (handle: number) => delete frameTasks[handle - 1]
+
+let frameNo = 0
+const now = () => frameNo * Entry.tickTime
+
+const originalSetTimeout = setTimeout
+const originalClearTimeout = clearTimeout
+
+const scheduleTimeout = (handler: TimerHandler, timeout = 0, ...args: unknown[]) =>
+  timeouts.push([handler, timeout + now(), ...args])
+
+const unscheduleTimeout = (id?: number) => typeof id == 'number' && delete timeouts[id - 1]
 
 const withMonkeyPatch = <Return, Args extends any[]>(callback: (...args: Args) => Return) => (...args: Args) => {
   Math.random = seededRandom
   self.requestAnimationFrame = scheduleFrame
   self.cancelAnimationFrame = unscheduleFrame
+  self.setTimeout = scheduleTimeout
+  self.clearTimeout = unscheduleTimeout
 
   const value = callback(...args)
 
   Math.random = originalRandom
   self.requestAnimationFrame = originalRequestAnimationFrame
   self.cancelAnimationFrame = originalCancelAnimationFrame
+  self.setTimeout = originalSetTimeout
+  self.clearTimeout = originalClearTimeout
 
   return value
 }
+
+const updateEngine = withMonkeyPatch(() => Entry.engine.update())
+
+Entry.engine.toggleRun()
+Entry.addEventListener('stop', () => controller.abort())
+
+clearInterval(Entry.engine.ticker)
+setInterval(Entry.engine.update)
 
 async function createVideoEncoder() {
   const handle = await self.showSaveFilePicker({
@@ -119,10 +133,10 @@ async function createVideoEncoder() {
     bitrate: QUALITY_MEDIUM,
   })
 
-  output.addVideoTrack(canvasSource)
+  output.addVideoTrack(canvasSource, { frameRate: 1000 / Entry.tickTime })
   await output.start()
 
-  let frameNo = 0
+  frameNo = 0
   const timer = new Timer(() => frameNo * Entry.tickTime / 1000)
 
   Entry.engine.updateProjectTimer = time =>
@@ -139,41 +153,31 @@ async function createVideoEncoder() {
   })
 
   Entry.TimeWait = class TimeWait extends Entry.TimeWait {
-    override startTime = this.now()
-
     constructor(id: unknown, cb: Function, ms: number) {
       super(id, cb, ms)
-      clearTimeout(this.timer)
-      this.timer = this.setTimeout(this.callback.bind(this), ms)
+      this.startTime = this.now()
     }
 
     protected now() {
       return frameNo * Entry.tickTime
     }
 
-    protected setTimeout(handler: TimerHandler, timeout = 0, ...args: unknown[]) {
-      return timeouts.push([handler, timeout + this.now(), ...args])
-    }
-
-    protected clearTimeout(id: number) {
-      delete timeouts[id]
-    }
-
     override pause() {
       if (this.timer) {
         this.ms! -= (this.now() - this.startTime!)
-        this.clearTimeout(this.timer)
+        unscheduleTimeout(this.timer)
       }
     }
 
     override resume() {
-      this.timer = this.setTimeout(this.callback.bind(this), this.ms)
+      this.timer = scheduleTimeout(this.callback.bind(this), this.ms)
       this.startTime = this.now()
     }
   }
 
-  while (!controller.signal.aborted) {
-    const ms = frameNo++ * Entry.tickTime
+  for (; !controller.signal.aborted; delayMode || ++frameNo) {
+    const ms = frameNo * Entry.tickTime
+    if (delayMode) ++frameNo
 
     frameTasks.forEach(withMonkeyPatch((callback, i) => {
       callback(ms)
@@ -185,14 +189,14 @@ async function createVideoEncoder() {
 
     timeouts.forEach(([handler, timeout, ...args], i) => {
       if (timeout <= ms) {
-        if (typeof handler == 'string') eval(handler)
+        if (typeof handler == 'string') eval?.(handler)
         else handler(...args)
         delete timeouts[i]
       }
     })
 
     Entry.engine.projectTimer.setValue(timer.time.toFixed(3))
-    withMonkeyPatch(() => Entry.engine.update())()
+    updateEngine()
   }
 
   await output.finalize()
