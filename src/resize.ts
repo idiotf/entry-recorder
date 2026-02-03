@@ -6,6 +6,8 @@ interface EntryGlobal {
   addEventListener(type: string, handler: () => void): unknown
   canvas_: HTMLCanvasElement
   engine: {
+    setTimeout(callback: Function, delay?: number): number
+    clearTimeout(id: number): void
     isState(state: string): boolean
     update(): void
     toggleRun(): void
@@ -34,6 +36,7 @@ interface EntryGlobal {
     _createRandomRoomId(): string
   }
   tickTime: number
+  FPS: number
   TimeWait: typeof TimeWait
   TimeWaitManager: TimeWaitManager
   stage?: Stage

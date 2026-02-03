@@ -55,7 +55,7 @@ self.setInterval = (setInterval => (handler, timeout, ...args) => {
 })(setInterval)
 
 const originalRandom = Math.random
-Math.seedrandom(prompt('시드를 입력하세요.', 'made by aqu3180'))
+Math.seedrandom('made by aqu3180')
 const seededRandom = Math.random
 Math.random = originalRandom
 
@@ -76,6 +76,9 @@ const now = () => frameNo * Entry.tickTime
 const originalSetTimeout = setTimeout
 const originalClearTimeout = clearTimeout
 
+const engineSetTimeout = Entry.engine.setTimeout
+const engineClearTimeout = Entry.engine.clearTimeout
+
 const scheduleTimeout = (handler: TimerHandler, timeout = 0, ...args: unknown[]) =>
   timeouts.push([handler, timeout + now(), ...args])
 
@@ -85,8 +88,8 @@ const withMonkeyPatch = <Return, Args extends any[]>(callback: (...args: Args) =
   Math.random = seededRandom
   self.requestAnimationFrame = scheduleFrame
   self.cancelAnimationFrame = unscheduleFrame
-  self.setTimeout = scheduleTimeout
-  self.clearTimeout = unscheduleTimeout
+  Entry.engine.setTimeout = self.setTimeout = scheduleTimeout
+  Entry.engine.clearTimeout = self.clearTimeout = unscheduleTimeout
 
   const value = callback(...args)
 
@@ -95,6 +98,8 @@ const withMonkeyPatch = <Return, Args extends any[]>(callback: (...args: Args) =
   self.cancelAnimationFrame = originalCancelAnimationFrame
   self.setTimeout = originalSetTimeout
   self.clearTimeout = originalClearTimeout
+  Entry.engine.setTimeout = engineSetTimeout
+  Entry.engine.clearTimeout = engineClearTimeout
 
   return value
 }
@@ -105,7 +110,7 @@ Entry.engine.toggleRun()
 Entry.addEventListener('stop', () => controller.abort())
 
 clearInterval(Entry.engine.ticker)
-setInterval(Entry.engine.update)
+setInterval(Entry.engine.update, Entry.tickTime)
 
 async function createVideoEncoder() {
   const handle = await self.showSaveFilePicker({
