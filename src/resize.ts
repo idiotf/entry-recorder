@@ -15,6 +15,8 @@ interface EntryGlobal {
     updateProjectTimer(time: number): void
     projectTimer: {
       setValue(v: unknown): void
+      setX(x: number): void
+      setY(y: number): void
       isPaused: boolean
     }
   }
