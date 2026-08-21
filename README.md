@@ -1,15 +1,5 @@
 # entry-recorder
 
-To install dependencies:
+**현재 이 레포는 불안정합니다! 작품 녹화 후 결과물이 올바른지 직접 검증해주세요!**
 
-```bash
-bun install
-```
-
-To run:
-
-```bash
-bun run index.ts
-```
-
-This project was created using `bun init` in bun v1.2.19. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+엔트리 작품을 프레임 단위로 녹화해줍니다.

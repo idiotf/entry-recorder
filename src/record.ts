@@ -210,5 +210,5 @@ async function createVideoEncoder() {
   }
 
   await output.finalize()
-  alert('녹화가 끝났습니다.')
+  alert('녹화가 끝났습니다. 페이지를 새로고침 해 주세요.')
 }
