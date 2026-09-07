@@ -1,5 +1,5 @@
 import { StreamTarget, CanvasSource, Mp4OutputFormat, Output } from 'mediabunny'
-import { codec, bitrate, skipFrames, delayMode } from './config'
+import { renderWidth, renderHeight, outputTransform, codec, bitrate, skipFrames, delayMode } from './config'
 import resize from './resize'
 import Timer from './timer'
 
@@ -130,11 +130,13 @@ async function createVideoEncoder() {
   })
 
   const canvas = Entry.canvas_
-  const width = 2560, height = 1440
+  resize(renderWidth, renderHeight)
 
-  resize(width, height)
-
-  const canvasSource = new CanvasSource(canvas, { codec, bitrate })
+  const canvasSource = new CanvasSource(canvas, {
+    codec,
+    bitrate,
+    transform: outputTransform,
+  })
 
   output.addVideoTrack(canvasSource, { frameRate: 1000 / Entry.tickTime })
   await output.start()

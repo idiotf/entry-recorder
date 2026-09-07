@@ -1,4 +1,19 @@
-import { QUALITY_MEDIUM } from 'mediabunny'
+import {
+  Quality,
+  // type VideoTransformOptions,
+} from 'mediabunny'
+
+export const renderWidth = 2560
+export const renderHeight = 1440
+export const outputTransform = undefined
+
+// export const renderWidth = 1920
+// export const renderHeight = 1080
+// export const outputTransform: VideoTransformOptions = {
+//   width: 1080,
+//   height: 1920,
+//   fit: 'contain',
+// }
 
 /** 몇 프레임(tick 이전 프레임 포함)을 스킵할지에 대한 설정값. 초시계 값에는 영항 없음. */
 export const skipFrames = 1
@@ -6,4 +21,6 @@ export const skipFrames = 1
 export const delayMode = false
 
 export const codec = 'avc'
-export const bitrate = QUALITY_MEDIUM
+export const bitrate = new Quality('medium')
+
+// Entry.tickTime = 1000 / 60
