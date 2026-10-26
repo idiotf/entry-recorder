@@ -10,7 +10,9 @@ interface EntryGlobal {
     clearTimeout(id: number): void
     isState(state: string): boolean
     update(): void
+    state: 'stop' | 'stopping' | 'pause' | 'run'
     toggleRun(): void
+    toggleStop(): Promise<void>
     ticker: number
     updateProjectTimer(time: number): void
     projectTimer: {

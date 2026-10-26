@@ -1,5 +1,5 @@
 import { StreamTarget, CanvasSource, Mp4OutputFormat, Output } from 'mediabunny'
-import { renderWidth, renderHeight, outputTransform, codec, bitrate, skipFrames, delayMode } from './config'
+import { renderWidth, renderHeight, outputTransform, codec, bitrate, frozenFrames, delayMode, timerOffset, maxFrameDuration } from './config'
 import resize from './resize'
 import Timer from './timer'
 
@@ -78,8 +78,14 @@ const originalClearTimeout = clearTimeout
 const engineSetTimeout = Entry.engine.setTimeout
 const engineClearTimeout = Entry.engine.clearTimeout
 
-const scheduleTimeout = (handler: TimerHandler, timeout = 0, ...args: unknown[]) =>
-  timeouts.push([handler, timeout + now(), ...args])
+const scheduleTimeout = (handler: TimerHandler, timeout = 0, ...args: unknown[]) => {
+  try {
+    if (delayMode) frameNo += 1
+    return timeouts.push([handler, timeout + now(), ...args])
+  } finally {
+    if (delayMode) frameNo -= 1
+  }
+}
 
 const unscheduleTimeout = (id?: number) => typeof id == 'number' && delete timeouts[id - 1]
 
@@ -142,12 +148,19 @@ async function createVideoEncoder() {
   await output.start()
 
   frameNo = 0
-  const timer = new Timer(() => frameNo * Entry.tickTime / 1000)
+  const timer = new Timer(() => now() / 1000)
 
   Entry.engine.projectTimer.setY(-999)
 
-  Entry.engine.updateProjectTimer = time =>
-    time == null || Entry.engine.projectTimer.setValue((timer.time = time).toFixed(3))
+  function syncProjectTimer() {
+    Entry.engine.projectTimer.setValue((timer.time + timerOffset).toFixed(3))
+  }
+
+  Entry.engine.updateProjectTimer = time => {
+    if (time == null) return
+    timer.time = time
+    syncProjectTimer()
+  }
 
   Object.defineProperty(Entry.engine.projectTimer, 'isPaused', {
     get() {
@@ -166,7 +179,7 @@ async function createVideoEncoder() {
     }
 
     protected now() {
-      return frameNo * Entry.tickTime
+      return now()
     }
 
     override pause() {
@@ -182,23 +195,9 @@ async function createVideoEncoder() {
     }
   }
 
-  for (let i = 0; i < skipFrames; ++i) {
-    Entry.engine.projectTimer.setValue(timer.time.toFixed(3))
-    updateEngine()
-  }
+  let ms = now()
 
-  for (; !controller.signal.aborted; delayMode || ++frameNo) {
-    const ms = frameNo * Entry.tickTime
-    if (delayMode) ++frameNo
-
-    frameTasks.forEach(withMonkeyPatch((callback, i) => {
-      callback(ms)
-      delete frameTasks[i]
-    }))
-
-    Entry.stage?.update()
-    await canvasSource.add(ms / 1000)
-
+  function stepEngine() {
     timeouts.forEach(([handler, timeout, ...args], i) => {
       if (timeout <= ms) {
         if (typeof handler == 'string') eval?.(handler)
@@ -207,8 +206,32 @@ async function createVideoEncoder() {
       }
     })
 
-    Entry.engine.projectTimer.setValue(timer.time.toFixed(3))
+    frameTasks.forEach(withMonkeyPatch((callback, i) => {
+      callback(ms)
+      delete frameTasks[i]
+    }))
+
     updateEngine()
+  }
+
+  syncProjectTimer()
+  for (let i = 0; i < frozenFrames; ++i) {
+    stepEngine()
+  }
+
+  while (!controller.signal.aborted && frameNo < maxFrameDuration) {
+    Entry.stage!.update()
+    await canvasSource.add(ms / 1000, Entry.tickTime / 1000)
+
+    ++frameNo
+    ms = now()
+    syncProjectTimer()
+
+    stepEngine()
+  }
+
+  if (Entry.engine.state !== 'stop') {
+    Entry.engine.toggleStop()
   }
 
   await output.finalize()
